@@ -1,0 +1,2 @@
+<?php
+define("GOOGLEKEYMAP","AIzaSyCL2U2im81jmXqGf753BJBTBePav82MHkI");

@@ -1,0 +1,28 @@
+{
+  "name": "vendor_name/gsmedia",
+  "description": "description",
+  "minimum-stability": "stable",
+  "license": "proprietary",
+  "authors": [
+    {
+      "name": "squal",
+      "email": "email@example.com"
+    }
+  ],
+  "require": {
+    "spatie/dropbox-api": "^1.21",
+    "cboden/ratchet": "^0.4.4",
+    "slim/slim": "^4.0",
+    "slim/psr7": "^1.0",
+    "textalk/websocket": "^1.6",
+    "mpdf/mpdf": "^6.1"
+  },
+  "config": {
+    "platform": {
+      "php": "7.4"
+    }
+  },
+  "require-dev": {
+    "deployer/deployer": "^7.3"
+  }
+}

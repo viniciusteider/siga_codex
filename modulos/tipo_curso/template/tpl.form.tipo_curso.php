@@ -1,0 +1,20 @@
+<form action="#" name="frm_tipo_curso" id="frm_tipo_curso" method="post">
+    <input type="hidden" name="id"  id="id"   value="<?=$linha['id'];?>"/>
+    <div class="form-body">
+        <div class="row p-t-20">
+            <div class="col-md-5 mb-2">
+                <div class="form-group">
+                    <label class="form-label" for="nome">*Nome</label>
+                    <input type="text" name="nome"  id="nome" maxlength="45" class="form-control validar-obrigatorio " value="<?=$linha['nome'];?>"/>
+                    <div class="text-muted"> Preencha o campo  Nome </div> </div>
+            </div>
+            <!--/span-->
+            <div class="col-md-7 mb-2">
+                <div class="form-group">
+                    <label class="form-label" for="descritivo">Descritivo</label>
+                    <input type="text" name="descritivo"  id="descritivo" maxlength="255" class="form-control  " value="<?=$linha['descritivo'];?>"/>
+                    <div class="text-muted"> Preencha o campo  Descritivo </div> </div>
+            </div>
+            <!--/span-->
+        </div>
+</form>

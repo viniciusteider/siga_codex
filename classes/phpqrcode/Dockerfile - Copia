@@ -1,0 +1,30 @@
+# Usa a imagem oficial do PHP 7.3 com Apache
+FROM php:7.3-apache
+
+# Instala extensões necessárias, incluindo suporte para MySQL
+RUN docker-php-ext-install mysqli pdo pdo_mysql sockets
+
+RUN apt update && apt install git vim -y
+
+# Instala o Composer
+RUN php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');" \
+    && php composer-setup.php \
+    && php -r "unlink('composer-setup.php');" \
+    && mv composer.phar /usr/local/bin/composer
+
+# Copia a configuração do virtual host para o container
+COPY 000-default.conf /etc/apache2/sites-available/000-default.conf
+RUN  echo "Listen 3000" >> /etc/apache2/ports.conf && \
+     echo "Listen 8090" >> /etc/apache2/ports.conf
+
+# Ativa o módulo rewrite do Apache
+RUN a2enmod rewrite
+
+# Reinicia o Apache para aplicar as configurações
+RUN service apache2 restart
+
+# Configura o diretório de trabalho
+WORKDIR /var/www/html
+
+# Expõe as portas
+EXPOSE 3000 8080 8090

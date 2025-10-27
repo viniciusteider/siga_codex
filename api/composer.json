@@ -1,0 +1,13 @@
+{
+    "autoload": {
+        "psr-4": {
+            "App\\": "src/"
+        }
+    },
+    "require": {
+        "firebase/php-jwt": "^6.4",
+        "cboden/ratchet": "^0.4.4",
+        "textalk/websocket": "^1.5",
+        "ratchet/pawl": "^0.4.1"
+    }
+}
