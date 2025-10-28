@@ -5,6 +5,12 @@ require_once __DIR__ . "/../../api/src/Classes/Connection.php";
 use App\Controllers\OccurrenceController;
 
 switch ($app_comando) {
+    case "pesquisa_ocorrencias":
+        $template = "tpl.pesquisa.ocorrencias.php";
+        break;
+    case "ajax_pesquisa_ocorrencias":
+        $template = "tpl.lis.pesquisa.ocorrencias.php";
+        break;
     case "listar_ocorrencias_abertas":
         $objOcorrencias = new Ocorrencias();
         $titulo = "Ocorrências Novas";
