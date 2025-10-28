@@ -210,32 +210,40 @@
                     <?php endif; ?>
                 </div>
                 <div class="tab-pane fade" id="tab_pacientes_vitimas" role="tabpanel">
-                    <?php if (is_array($linha_pacientes) && count($linha_pacientes) > 0): ?>
-                        <div class="table-responsive">
-                            <table class="table table-row-bordered align-middle gs-0 gy-3">
-                                <thead class="bg-light">
-                                <tr class="fw-semibold text-gray-600 text-uppercase fs-7">
-                                    <th>Vítima</th>
-                                    <th>Destino</th>
-                                    <th>Lesões</th>
-                                    <th>Procedimentos</th>
-                                </tr>
-                                </thead>
-                                <tbody class="fs-7 text-gray-700">
-                                <?php foreach ($linha_pacientes as $paci): ?>
-                                    <tr>
-                                        <td><?=$paci['nome']?></td>
-                                        <td><?=$paci['nome_hospital']?></td>
-                                        <td><?=$paci['lista_lesoes']?></td>
-                                        <td><?=$paci['lista_Procedimento']?></td>
-                                    </tr>
-                                <?php endforeach; ?>
-                                </tbody>
-                            </table>
+                    <?php
+                    include_once "modulos/paciente/template/js.paciente.php";
+                    $idOcorrenciaFicha = $linha['id'];
+                    $filtroPacienteSessao = $_SESSION['FILTRO_PACIENTE'] ?? [];
+                    if (($filtroPacienteSessao['id_ocorrencia'] ?? null) !== $idOcorrenciaFicha) {
+                        $filtroPacienteSessao = [];
+                    }
+                    $filtroPacienteSessao = array_merge([
+                        'pagina' => 0,
+                        'ordem' => '',
+                        'filtro' => '',
+                        'retomar_filtro' => '',
+                        'numero_registro_hidden' => '',
+                    ], $filtroPacienteSessao);
+                    $filtroPacienteSessao['id_ocorrencia'] = $idOcorrenciaFicha;
+                    $_SESSION['FILTRO_PACIENTE'] = $filtroPacienteSessao;
+                    ?>
+                    <form action="#" method="post" id="frm_paciente_geral" class="d-none">
+                        <input type="hidden" name="pagina" id="pagina" value="<?=$filtroPacienteSessao['pagina']; ?>">
+                        <input type="hidden" name="id_ocorrencia" id="id_ocorrencia" value="<?=$filtroPacienteSessao['id_ocorrencia']; ?>">
+                        <input type="hidden" name="ordem" id="ordem" value="<?=$filtroPacienteSessao['ordem']; ?>">
+                        <input type="hidden" name="filtro" id="filtro" value="<?=$filtroPacienteSessao['filtro']; ?>">
+                        <input type="hidden" name="retomar_filtro" id="retomar_filtro" value="<?=$filtroPacienteSessao['retomar_filtro']; ?>">
+                        <input type="hidden" name="numero_registro_hidden" id="numero_registro_hidden" value="<?=$filtroPacienteSessao['numero_registro_hidden']; ?>">
+                    </form>
+                    <div class="card card-flush">
+                        <div class="card-header align-items-center">
+                            <h3 class="card-title fw-bold text-dark mb-0">Pacientes/Vítimas</h3>
                         </div>
-                    <?php else: ?>
-                        <div class="alert alert-light-info">Nenhuma vítima cadastrada para esta ocorrência.</div>
-                    <?php endif; ?>
+                        <div class="card-body" id="conteudo_paciente">
+                            <div class="fa-2x"><i class="fa fs-2x fa-solid fa-spinner fa-spin-pulse"></i> Carregando...</div>
+                        </div>
+                    </div>
+                    <?php include_once "modulos/paciente/template/tpl.modal.paciente.php"; ?>
                 </div>
             </div>
         </div>
