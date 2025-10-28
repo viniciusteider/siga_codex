@@ -234,10 +234,17 @@
                         <input type="hidden" name="filtro" id="filtro" value="<?=$filtroPacienteSessao['filtro']; ?>">
                         <input type="hidden" name="retomar_filtro" id="retomar_filtro" value="<?=$filtroPacienteSessao['retomar_filtro']; ?>">
                         <input type="hidden" name="numero_registro_hidden" id="numero_registro_hidden" value="<?=$filtroPacienteSessao['numero_registro_hidden']; ?>">
+                        <input type="hidden" name="tipo_listagem_paciente" id="tipo_listagem_paciente" value="resumido">
                     </form>
                     <div class="card card-flush">
-                        <div class="card-header align-items-center">
+                        <div class="card-header align-items-center flex-wrap gap-3">
                             <h3 class="card-title fw-bold text-dark mb-0">Pacientes/Vítimas</h3>
+                            <div class="card-toolbar ms-auto">
+                                <div class="btn-group btn-group-sm" role="group" aria-label="Alternar listagem de pacientes">
+                                    <button type="button" class="btn btn-light-primary active" id="btn-listagem-paciente-resumida">Listagem resumida</button>
+                                    <button type="button" class="btn btn-light" id="btn-listagem-paciente-completa">Listagem completa</button>
+                                </div>
+                            </div>
                         </div>
                         <div class="card-body" id="conteudo_paciente">
                             <div class="fa-2x"><i class="fa fs-2x fa-solid fa-spinner fa-spin-pulse"></i> Carregando...</div>
@@ -249,3 +256,67 @@
         </div>
     </div>
 </div>
+<script type="text/javascript">
+    $(function () {
+        var pacienteListagemAtual = 'resumido';
+
+        function atualizarBotoes(tipo) {
+            if (tipo === 'completo') {
+                $('#btn-listagem-paciente-completa').removeClass('btn-light').addClass('btn-light-primary active');
+                $('#btn-listagem-paciente-resumida').removeClass('btn-light-primary active').addClass('btn-light');
+            } else {
+                $('#btn-listagem-paciente-resumida').removeClass('btn-light').addClass('btn-light-primary active');
+                $('#btn-listagem-paciente-completa').removeClass('btn-light-primary active').addClass('btn-light');
+            }
+            $('#tipo_listagem_paciente').val(tipo);
+        }
+
+        function carregarListagemPacientes(pagina, filtro, ordem) {
+            if (typeof pagina !== 'undefined' && pagina !== null) {
+                $('#pagina').val(pagina);
+            }
+            if (typeof filtro !== 'undefined' && filtro !== null && filtro !== '') {
+                $('#filtro').val(filtro);
+            }
+            if (typeof ordem !== 'undefined' && ordem !== null && ordem !== '') {
+                $('#ordem').val(ordem);
+            }
+            var registros = $('#numero_registros').val();
+            if (typeof registros !== 'undefined' && registros !== '') {
+                $('#numero_registro_hidden').val(registros);
+            }
+
+            var comando = 'ajax_listar_paciente';
+            if (pacienteListagemAtual === 'completo') {
+                comando = 'ajax_listar_paciente_completo';
+            }
+
+            $('#conteudo_paciente').load('index_xml.php?app_modulo=paciente&app_comando=' + comando, $('#frm_paciente_geral').serializeArray());
+        }
+
+        window.AtualizarGridPaciente = function (pagina, busca, filtro, ordem) {
+            carregarListagemPacientes(pagina, filtro, ordem);
+        };
+
+        $('#btn-listagem-paciente-resumida').on('click', function () {
+            if (pacienteListagemAtual === 'resumido') {
+                return;
+            }
+            pacienteListagemAtual = 'resumido';
+            atualizarBotoes('resumido');
+            carregarListagemPacientes($('#pagina').val(), $('#filtro').val(), $('#ordem').val());
+        });
+
+        $('#btn-listagem-paciente-completa').on('click', function () {
+            if (pacienteListagemAtual === 'completo') {
+                return;
+            }
+            pacienteListagemAtual = 'completo';
+            atualizarBotoes('completo');
+            carregarListagemPacientes($('#pagina').val(), $('#filtro').val(), $('#ordem').val());
+        });
+
+        atualizarBotoes('resumido');
+        carregarListagemPacientes($('#pagina').val(), $('#filtro').val(), $('#ordem').val());
+    });
+</script>
