@@ -210,34 +210,113 @@
                     <?php endif; ?>
                 </div>
                 <div class="tab-pane fade" id="tab_pacientes_vitimas" role="tabpanel">
-                    <?php if (is_array($linha_pacientes) && count($linha_pacientes) > 0): ?>
-                        <div class="table-responsive">
-                            <table class="table table-row-bordered align-middle gs-0 gy-3">
-                                <thead class="bg-light">
-                                <tr class="fw-semibold text-gray-600 text-uppercase fs-7">
-                                    <th>Vítima</th>
-                                    <th>Destino</th>
-                                    <th>Lesões</th>
-                                    <th>Procedimentos</th>
-                                </tr>
-                                </thead>
-                                <tbody class="fs-7 text-gray-700">
-                                <?php foreach ($linha_pacientes as $paci): ?>
-                                    <tr>
-                                        <td><?=$paci['nome']?></td>
-                                        <td><?=$paci['nome_hospital']?></td>
-                                        <td><?=$paci['lista_lesoes']?></td>
-                                        <td><?=$paci['lista_Procedimento']?></td>
-                                    </tr>
-                                <?php endforeach; ?>
-                                </tbody>
-                            </table>
+                    <?php
+                    include_once "modulos/paciente/template/js.paciente.php";
+                    $idOcorrenciaFicha = $linha['id'];
+                    $filtroPacienteSessao = $_SESSION['FILTRO_PACIENTE'] ?? [];
+                    if (($filtroPacienteSessao['id_ocorrencia'] ?? null) !== $idOcorrenciaFicha) {
+                        $filtroPacienteSessao = [];
+                    }
+                    $filtroPacienteSessao = array_merge([
+                        'pagina' => 0,
+                        'ordem' => '',
+                        'filtro' => '',
+                        'retomar_filtro' => '',
+                        'numero_registro_hidden' => '',
+                    ], $filtroPacienteSessao);
+                    $filtroPacienteSessao['id_ocorrencia'] = $idOcorrenciaFicha;
+                    $_SESSION['FILTRO_PACIENTE'] = $filtroPacienteSessao;
+                    ?>
+                    <form action="#" method="post" id="frm_paciente_geral" class="d-none">
+                        <input type="hidden" name="pagina" id="pagina" value="<?=$filtroPacienteSessao['pagina']; ?>">
+                        <input type="hidden" name="id_ocorrencia" id="id_ocorrencia" value="<?=$filtroPacienteSessao['id_ocorrencia']; ?>">
+                        <input type="hidden" name="ordem" id="ordem" value="<?=$filtroPacienteSessao['ordem']; ?>">
+                        <input type="hidden" name="filtro" id="filtro" value="<?=$filtroPacienteSessao['filtro']; ?>">
+                        <input type="hidden" name="retomar_filtro" id="retomar_filtro" value="<?=$filtroPacienteSessao['retomar_filtro']; ?>">
+                        <input type="hidden" name="numero_registro_hidden" id="numero_registro_hidden" value="<?=$filtroPacienteSessao['numero_registro_hidden']; ?>">
+                        <input type="hidden" name="tipo_listagem_paciente" id="tipo_listagem_paciente" value="resumido">
+                    </form>
+                    <div class="card card-flush">
+                        <div class="card-header align-items-center flex-wrap gap-3">
+                            <h3 class="card-title fw-bold text-dark mb-0">Pacientes/Vítimas</h3>
+                            <div class="card-toolbar ms-auto">
+                                <div class="btn-group btn-group-sm" role="group" aria-label="Alternar listagem de pacientes">
+                                    <button type="button" class="btn btn-light-primary active" id="btn-listagem-paciente-resumida">Listagem resumida</button>
+                                    <button type="button" class="btn btn-light" id="btn-listagem-paciente-completa">Listagem completa</button>
+                                </div>
+                            </div>
                         </div>
-                    <?php else: ?>
-                        <div class="alert alert-light-info">Nenhuma vítima cadastrada para esta ocorrência.</div>
-                    <?php endif; ?>
+                        <div class="card-body" id="conteudo_paciente">
+                            <div class="fa-2x"><i class="fa fs-2x fa-solid fa-spinner fa-spin-pulse"></i> Carregando...</div>
+                        </div>
+                    </div>
+                    <?php include_once "modulos/paciente/template/tpl.modal.paciente.php"; ?>
                 </div>
             </div>
         </div>
     </div>
 </div>
+<script type="text/javascript">
+    $(function () {
+        var pacienteListagemAtual = 'resumido';
+
+        function atualizarBotoes(tipo) {
+            if (tipo === 'completo') {
+                $('#btn-listagem-paciente-completa').removeClass('btn-light').addClass('btn-light-primary active');
+                $('#btn-listagem-paciente-resumida').removeClass('btn-light-primary active').addClass('btn-light');
+            } else {
+                $('#btn-listagem-paciente-resumida').removeClass('btn-light').addClass('btn-light-primary active');
+                $('#btn-listagem-paciente-completa').removeClass('btn-light-primary active').addClass('btn-light');
+            }
+            $('#tipo_listagem_paciente').val(tipo);
+        }
+
+        function carregarListagemPacientes(pagina, filtro, ordem) {
+            if (typeof pagina !== 'undefined' && pagina !== null) {
+                $('#pagina').val(pagina);
+            }
+            if (typeof filtro !== 'undefined' && filtro !== null && filtro !== '') {
+                $('#filtro').val(filtro);
+            }
+            if (typeof ordem !== 'undefined' && ordem !== null && ordem !== '') {
+                $('#ordem').val(ordem);
+            }
+            var registros = $('#numero_registros').val();
+            if (typeof registros !== 'undefined' && registros !== '') {
+                $('#numero_registro_hidden').val(registros);
+            }
+
+            var comando = 'ajax_listar_paciente';
+            if (pacienteListagemAtual === 'completo') {
+                comando = 'ajax_listar_paciente_completo';
+            }
+
+            $('#conteudo_paciente').load('index_xml.php?app_modulo=paciente&app_comando=' + comando, $('#frm_paciente_geral').serializeArray());
+        }
+
+        window.AtualizarGridPaciente = function (pagina, busca, filtro, ordem) {
+            carregarListagemPacientes(pagina, filtro, ordem);
+        };
+
+        $('#btn-listagem-paciente-resumida').on('click', function () {
+            if (pacienteListagemAtual === 'resumido') {
+                return;
+            }
+            pacienteListagemAtual = 'resumido';
+            atualizarBotoes('resumido');
+            carregarListagemPacientes($('#pagina').val(), $('#filtro').val(), $('#ordem').val());
+        });
+
+        $('#btn-listagem-paciente-completa').on('click', function () {
+            if (pacienteListagemAtual === 'completo') {
+                return;
+            }
+            pacienteListagemAtual = 'completo';
+            atualizarBotoes('completo');
+            carregarListagemPacientes($('#pagina').val(), $('#filtro').val(), $('#ordem').val());
+        });
+
+        atualizarBotoes('resumido');
+        carregarListagemPacientes($('#pagina').val(), $('#filtro').val(), $('#ordem').val());
+    });
+</script>

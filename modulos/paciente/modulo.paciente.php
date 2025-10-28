@@ -453,6 +453,10 @@ switch($app_comando)
         $template = "tpl.lis.paciente.php";
         break;
 
+    case "ajax_listar_paciente_completo":
+        $template = "tpl.lis.paciente_completo.php";
+        break;
+
     case "paciente_pdf":
         $template = "tpl.prontuario.php";
         break;

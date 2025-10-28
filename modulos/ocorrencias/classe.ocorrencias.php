@@ -638,20 +638,40 @@ class Ocorrencias
         $pdo = $this->getConexao();
 
         $joins = "
-		    INNER JOIN grupo ON (grupo.id = ocorrencias.id_grupo) 
+                    INNER JOIN grupo ON (grupo.id = ocorrencias.id_grupo)
             INNER JOIN `evento` ON (`ocorrencias`.`id_evento` = `evento`.`id`)
             INNER JOIN `ocorrencias_status` ON (`ocorrencias_status`.`id` = `ocorrencias`.`id_ocorrencia_status`)
             LEFT JOIN `subevento` ON (`ocorrencias`.`id_subevento` = `subevento`.`id`)
             LEFT JOIN grupo AS grupo_pai ON (grupo_pai.id = grupo.id_grupo_pai)
-		";
+            LEFT JOIN (
+                SELECT
+                    paciente.id_ocorrencia,
+                    GROUP_CONCAT(DISTINCT paciente.nome ORDER BY paciente.nome SEPARATOR ', ') AS nomes_vitimas
+                FROM paciente
+                WHERE paciente.excluido IS NULL OR paciente.excluido = 0
+                GROUP BY paciente.id_ocorrencia
+            ) AS pacientes_lista ON (pacientes_lista.id_ocorrencia = ocorrencias.id)
+                ";
 
         $where = "
-			WHERE ocorrencias.id > 0
-		";
+                        WHERE ocorrencias.id > 0
+                ";
 
         if (!empty($idGrupo))  $where .= " AND (grupo.id = {$idGrupo} OR grupo.arvore LIKE '%;$idGrupo;%')";
-        if ($busca != "") $where .= " AND (nome LIKE :busca)";
+        if ($busca != "") $where .= " AND (ocorrencias.nome LIKE :busca)";
+
+        $idOcorrencia = isset($param['id']) && $param['id'] !== '' ? $param['id'] : null;
+        $enderecoBusca = isset($param['endereco']) && trim($param['endereco']) !== '' ? "%" . trim($param['endereco']) . "%" : null;
+        $dataInicio = isset($param['data_inicio']) && $param['data_inicio'] !== '' ? $param['data_inicio'] : null;
+        $dataFim = isset($param['data_fim']) && $param['data_fim'] !== '' ? $param['data_fim'] : null;
+        $nomeVitima = isset($param['nome_vitima']) && trim($param['nome_vitima']) !== '' ? "%" . trim($param['nome_vitima']) . "%" : null;
+
         if (($param['data_hora_inicio']))  $where .= " AND ocorrencias.data_hora_cadastro >='{$param['data_hora_inicio']}' AND ocorrencias.data_hora_cadastro <= '{$param['data_hora_fim']}'";
+        if ($idOcorrencia !== null) $where .= " AND ocorrencias.id = :id_ocorrencia";
+        if ($dataInicio !== null) $where .= " AND ocorrencias.data_hora >= :data_inicio";
+        if ($dataFim !== null) $where .= " AND ocorrencias.data_hora <= :data_fim";
+        if ($enderecoBusca !== null) $where .= " AND (CONCAT_WS(' ', ocorrencias.logradouro, ocorrencias.numero, ocorrencias.bairro, ocorrencias.cidade) LIKE :endereco)";
+        if ($nomeVitima !== null) $where .= " AND EXISTS (SELECT 1 FROM paciente WHERE paciente.id_ocorrencia = ocorrencias.id AND (paciente.excluido IS NULL OR paciente.excluido = 0) AND paciente.nome LIKE :nome_vitima)";
 
         $sql = "
 			SELECT COUNT(*) AS total
@@ -665,6 +685,21 @@ class Ocorrencias
         if ($busca != "") {
             $busca = "%" . $busca . "%";
             $stmt->bindParam(":busca", $busca, PDO::PARAM_STR);
+        }
+        if ($idOcorrencia !== null) {
+            $stmt->bindValue(":id_ocorrencia", $idOcorrencia, PDO::PARAM_INT);
+        }
+        if ($dataInicio !== null) {
+            $stmt->bindValue(":data_inicio", $dataInicio, PDO::PARAM_STR);
+        }
+        if ($dataFim !== null) {
+            $stmt->bindValue(":data_fim", $dataFim, PDO::PARAM_STR);
+        }
+        if ($enderecoBusca !== null) {
+            $stmt->bindValue(":endereco", $enderecoBusca, PDO::PARAM_STR);
+        }
+        if ($nomeVitima !== null) {
+            $stmt->bindValue(":nome_vitima", $nomeVitima, PDO::PARAM_STR);
         }
 
 
@@ -681,11 +716,12 @@ class Ocorrencias
                     ,ocorrencias_status.nome as nome_status   
                     ,grupo.id_grupo_pai
                     ,grupo_pai.nome AS nome_grupo_pai
-			FROM ocorrencias
+                    ,pacientes_lista.nomes_vitimas
+                        FROM ocorrencias
 
-			$joins
-			$where
-		";
+                        $joins
+                        $where
+                ";
 
         if ($filtro != "") $sql .= " ORDER BY $filtro $ordem";
         else $sql .= " ORDER BY ocorrencias.id DESC";
@@ -697,6 +733,21 @@ class Ocorrencias
         if ($busca != "") {
             $busca = "%" . $busca . "%";
             $stmt->bindParam(":busca", $busca, PDO::PARAM_STR);
+        }
+        if ($idOcorrencia !== null) {
+            $stmt->bindValue(":id_ocorrencia", $idOcorrencia, PDO::PARAM_INT);
+        }
+        if ($dataInicio !== null) {
+            $stmt->bindValue(":data_inicio", $dataInicio, PDO::PARAM_STR);
+        }
+        if ($dataFim !== null) {
+            $stmt->bindValue(":data_fim", $dataFim, PDO::PARAM_STR);
+        }
+        if ($enderecoBusca !== null) {
+            $stmt->bindValue(":endereco", $enderecoBusca, PDO::PARAM_STR);
+        }
+        if ($nomeVitima !== null) {
+            $stmt->bindValue(":nome_vitima", $nomeVitima, PDO::PARAM_STR);
         }
 
         $stmt->execute();

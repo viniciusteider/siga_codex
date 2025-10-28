@@ -688,7 +688,7 @@ class Paciente
         $pdo = $this->getConexao();
 
         $joins = "
-		
+
 		";
 
         $where = "
@@ -737,6 +737,364 @@ class Paciente
 
         $stmt->execute();
         $linhas = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        return [$linhas,$totalRegistros];
+    }
+    public function ListarPaginacaoCompleto($idGrupo,$numeroRegistros,$numeroInicioRegistro,$busca = "",$filtro = "",$ordem = "" ,$param = "")
+    {
+        $pdo = $this->getConexao();
+
+        $where = " WHERE paciente.excluido IS NULL";
+        if (!empty($param['id_ocorrencia'])) {
+            $where .= " AND paciente.id_ocorrencia = " . (int)$param['id_ocorrencia'];
+        }
+        if($busca != "") {
+            $where .= " AND (paciente.nome LIKE :busca)";
+        }
+        if (!empty($param['data_hora_inicio'])) {
+            $where .= " AND paciente.data_hora_cadastro >='{$param['data_hora_inicio']}' AND paciente.data_hora_cadastro <= '{$param['data_hora_fim']}'";
+        }
+
+        $sql = "
+                        SELECT COUNT(*) AS total
+                        FROM paciente
+                        $where
+                ";
+
+        $stmt = $pdo->prepare($sql);
+
+        if($busca != "") {
+            $buscaTemp = "%".$busca."%";
+            $stmt->bindParam(":busca",$buscaTemp,PDO::PARAM_STR);
+        }
+
+        $stmt->execute();
+        $totalRegistros = (int)$stmt->fetch(PDO::FETCH_OBJ)->total;
+
+        $sql = "
+                        SELECT
+                                paciente.*,
+                                hospital.nome AS nome_hospital,
+                                paciente_situacao.nome AS nome_situacao,
+                                tipo_obstetricia.nome AS nome_tipo_obstetricia,
+                                respiracao.nome AS nome_respiracao,
+                                vias_aereas.nome AS nome_vias_aereas,
+                                pessoal_etnia.nome AS nome_etnia
+                        FROM paciente
+                        LEFT JOIN hospital ON (hospital.id = paciente.id_hospital)
+                        LEFT JOIN paciente_situacao ON (paciente_situacao.id = paciente.id_situacao)
+                        LEFT JOIN tipo_obstetricia ON (tipo_obstetricia.id = paciente.id_tipo_obstetricia)
+                        LEFT JOIN respiracao ON (respiracao.id = paciente.id_respiracao)
+                        LEFT JOIN vias_aereas ON (vias_aereas.id = paciente.id_vias_aereas)
+                        LEFT JOIN pessoal_etnia ON (pessoal_etnia.id = paciente.id_etnia)
+                        $where
+                ";
+
+        if($filtro != "") {
+            $sql .=" ORDER BY $filtro $ordem";
+        } else {
+            $sql .=" ORDER BY paciente.id DESC";
+        }
+        $sql .= " LIMIT :offset,:limit";
+
+        $stmt = $pdo->prepare($sql);
+        $stmt->bindParam(":offset",$numeroInicioRegistro,PDO::PARAM_INT);
+        $stmt->bindParam(":limit",$numeroRegistros,PDO::PARAM_INT);
+
+        if($busca != "") {
+            $buscaTemp = "%".$busca."%";
+            $stmt->bindParam(":busca",$buscaTemp,PDO::PARAM_STR);
+        }
+
+        $stmt->execute();
+        $linhas = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        if (!is_array($linhas) || count($linhas) === 0) {
+            return [$linhas,$totalRegistros];
+        }
+
+        $ids = array_column($linhas, 'id');
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        $mapaPacientes = [];
+
+        foreach ($linhas as $indice => $linha) {
+            $mapaPacientes[$linha['id']] = $indice;
+            $linhas[$indice]['lista_lesoes'] = [];
+            $linhas[$indice]['lista_padroes'] = [];
+            $linhas[$indice]['lista_sondagens'] = [];
+            $linhas[$indice]['lista_curativos'] = [];
+            $linhas[$indice]['lista_imobilizacoes'] = [];
+            $linhas[$indice]['lista_medicamentos'] = [];
+            $linhas[$indice]['lista_sinais_vitais'] = [];
+            $linhas[$indice]['lista_sinais_clinicos'] = [];
+            $linhas[$indice]['lista_obstetricia'] = [];
+            $linhas[$indice]['lista_circulacao'] = [];
+            $linhas[$indice]['lista_pupilas'] = [];
+        }
+
+        $timezone = $param['timezone'] ?? ($_SESSION['usuario']['timezone'] ?? 'UTC');
+
+        // Lesões
+        $sqlLesoes = "SELECT paciente_lesoes.id_paciente, partes_corpo.nome AS parte_nome, lesoes.nome AS lesao_nome
+            FROM paciente_lesoes
+            INNER JOIN lesoes ON (lesoes.id = paciente_lesoes.id_lesao)
+            INNER JOIN partes_corpo ON (partes_corpo.id = paciente_lesoes.id_parte_corpo)
+            WHERE paciente_lesoes.excluido IS NULL AND paciente_lesoes.id_paciente IN ($placeholders)";
+        $stmtLesoes = $pdo->prepare($sqlLesoes);
+        foreach ($ids as $i => $id) {
+            $stmtLesoes->bindValue($i + 1, $id, PDO::PARAM_INT);
+        }
+        $stmtLesoes->execute();
+        foreach ($stmtLesoes->fetchAll(PDO::FETCH_ASSOC) as $linhaLesao) {
+            if (!isset($mapaPacientes[$linhaLesao['id_paciente']])) {
+                continue;
+            }
+            $indice = $mapaPacientes[$linhaLesao['id_paciente']];
+            $descricao = trim($linhaLesao['parte_nome'] . ' - ' . $linhaLesao['lesao_nome']);
+            if ($descricao !== '') {
+                $linhas[$indice]['lista_lesoes'][] = $descricao;
+            }
+        }
+
+        // Procedimentos
+        $sqlProcedimentos = "SELECT paciente_procedimentos.id_paciente, paciente_procedimentos.id_procedimento_tipo, procedimentos.procedimento
+            FROM paciente_procedimentos
+            INNER JOIN procedimentos ON (procedimentos.id = paciente_procedimentos.id_procedimento)
+            WHERE paciente_procedimentos.excluido IS NULL AND paciente_procedimentos.id_paciente IN ($placeholders)";
+        $stmtProced = $pdo->prepare($sqlProcedimentos);
+        foreach ($ids as $i => $id) {
+            $stmtProced->bindValue($i + 1, $id, PDO::PARAM_INT);
+        }
+        $stmtProced->execute();
+        foreach ($stmtProced->fetchAll(PDO::FETCH_ASSOC) as $linhaProc) {
+            if (!isset($mapaPacientes[$linhaProc['id_paciente']])) {
+                continue;
+            }
+            $indice = $mapaPacientes[$linhaProc['id_paciente']];
+            $descricao = trim($linhaProc['procedimento']);
+            if ($descricao === '') {
+                continue;
+            }
+            switch ((int)$linhaProc['id_procedimento_tipo']) {
+                case 1:
+                    $linhas[$indice]['lista_padroes'][] = $descricao;
+                    break;
+                case 2:
+                    $linhas[$indice]['lista_sondagens'][] = $descricao;
+                    break;
+                case 3:
+                    $linhas[$indice]['lista_curativos'][] = $descricao;
+                    break;
+                case 4:
+                    $linhas[$indice]['lista_imobilizacoes'][] = $descricao;
+                    break;
+            }
+        }
+
+        // Medicamentos
+        $sqlMedicamentos = "SELECT paciente_medicamentos.id_paciente, medicamentos.nome AS medicamento_nome, vias.nome AS nome_via,
+                paciente_medicamentos.dose, unidade_medida.nome AS nome_unidade, paciente_medicamentos.horario
+            FROM paciente_medicamentos
+            LEFT JOIN medicamentos ON (medicamentos.id = paciente_medicamentos.id_medicamento)
+            LEFT JOIN vias ON (vias.id = paciente_medicamentos.id_via)
+            LEFT JOIN unidade_medida ON (unidade_medida.id = paciente_medicamentos.unidade_medida_id)
+            WHERE paciente_medicamentos.excluido IS NULL AND paciente_medicamentos.id_paciente IN ($placeholders)
+            ORDER BY paciente_medicamentos.horario";
+        $stmtMedicamentos = $pdo->prepare($sqlMedicamentos);
+        foreach ($ids as $i => $id) {
+            $stmtMedicamentos->bindValue($i + 1, $id, PDO::PARAM_INT);
+        }
+        $stmtMedicamentos->execute();
+        foreach ($stmtMedicamentos->fetchAll(PDO::FETCH_ASSOC) as $linhaMedic) {
+            if (!isset($mapaPacientes[$linhaMedic['id_paciente']])) {
+                continue;
+            }
+            $indice = $mapaPacientes[$linhaMedic['id_paciente']];
+            $partes = [];
+            if ($linhaMedic['medicamento_nome'] !== null && $linhaMedic['medicamento_nome'] !== '') {
+                $partes[] = $linhaMedic['medicamento_nome'];
+            }
+            if ($linhaMedic['nome_via'] !== null && $linhaMedic['nome_via'] !== '') {
+                $partes[] = 'Via: ' . $linhaMedic['nome_via'];
+            }
+            if ($linhaMedic['dose'] !== null && $linhaMedic['dose'] !== '') {
+                $dose = 'Dose: ' . $linhaMedic['dose'];
+                if ($linhaMedic['nome_unidade'] !== null && $linhaMedic['nome_unidade'] !== '') {
+                    $dose .= ' ' . $linhaMedic['nome_unidade'];
+                }
+                $partes[] = $dose;
+            }
+            if ($linhaMedic['horario'] !== null && $linhaMedic['horario'] !== '0000-00-00 00:00:00') {
+                $partes[] = 'Horário: ' . Conexao::PrepararDataPHP($linhaMedic['horario'], $timezone, 'd/m/Y H:i');
+            }
+            if (!empty($partes)) {
+                $linhas[$indice]['lista_medicamentos'][] = implode(' | ', $partes);
+            }
+        }
+
+        // Sinais vitais
+        $sqlSinaisVitais = "SELECT paciente_sinais_vitais.id_paciente, paciente_sinais_vitais.horario,
+                paciente_sinais_vitais.pressao_arterial_maxima, paciente_sinais_vitais.pressao_arterial_minima,
+                paciente_sinais_vitais.frequencia_cardiaca, paciente_sinais_vitais.frequencia_respiratoria,
+                paciente_sinais_vitais.saturacao_o2, paciente_sinais_vitais.glasgow,
+                paciente_sinais_vitais.temperatura, paciente_sinais_vitais.hgt, paciente_sinais_vitais.escala_trauma
+            FROM paciente_sinais_vitais
+            WHERE paciente_sinais_vitais.excluido IS NULL AND paciente_sinais_vitais.id_paciente IN ($placeholders)
+            ORDER BY paciente_sinais_vitais.horario";
+        $stmtSinaisVitais = $pdo->prepare($sqlSinaisVitais);
+        foreach ($ids as $i => $id) {
+            $stmtSinaisVitais->bindValue($i + 1, $id, PDO::PARAM_INT);
+        }
+        $stmtSinaisVitais->execute();
+        foreach ($stmtSinaisVitais->fetchAll(PDO::FETCH_ASSOC) as $linhaSinal) {
+            if (!isset($mapaPacientes[$linhaSinal['id_paciente']])) {
+                continue;
+            }
+            $indice = $mapaPacientes[$linhaSinal['id_paciente']];
+            $partes = [];
+            if ($linhaSinal['horario'] !== null && $linhaSinal['horario'] !== '0000-00-00 00:00:00') {
+                $partes[] = Conexao::PrepararDataPHP($linhaSinal['horario'], $timezone, 'd/m/Y H:i');
+            }
+            if ($linhaSinal['pressao_arterial_maxima'] !== null || $linhaSinal['pressao_arterial_minima'] !== null) {
+                $paMax = $linhaSinal['pressao_arterial_maxima'] !== null ? $linhaSinal['pressao_arterial_maxima'] : '';
+                $paMin = $linhaSinal['pressao_arterial_minima'] !== null ? $linhaSinal['pressao_arterial_minima'] : '';
+                $partes[] = 'PA: ' . trim($paMax . '/' . $paMin, '/');
+            }
+            if ($linhaSinal['frequencia_cardiaca'] !== null) {
+                $partes[] = 'FC: ' . $linhaSinal['frequencia_cardiaca'];
+            }
+            if ($linhaSinal['frequencia_respiratoria'] !== null) {
+                $partes[] = 'FR: ' . $linhaSinal['frequencia_respiratoria'];
+            }
+            if ($linhaSinal['saturacao_o2'] !== null) {
+                $partes[] = 'SpO2: ' . $linhaSinal['saturacao_o2'];
+            }
+            if ($linhaSinal['glasgow'] !== null) {
+                $partes[] = 'Glasgow: ' . $linhaSinal['glasgow'];
+            }
+            if ($linhaSinal['temperatura'] !== null) {
+                $partes[] = 'Temp: ' . $linhaSinal['temperatura'];
+            }
+            if ($linhaSinal['hgt'] !== null) {
+                $partes[] = 'HGT: ' . $linhaSinal['hgt'];
+            }
+            if ($linhaSinal['escala_trauma'] !== null) {
+                $partes[] = 'Escala Trauma: ' . $linhaSinal['escala_trauma'];
+            }
+            if (!empty($partes)) {
+                $linhas[$indice]['lista_sinais_vitais'][] = implode(' | ', $partes);
+            }
+        }
+
+        // Sinais clínicos
+        $sqlSinaisClinicos = "SELECT paciente_sinais_clinicos.id_paciente, sinais_clinicos.nome
+            FROM paciente_sinais_clinicos
+            INNER JOIN sinais_clinicos ON (sinais_clinicos.id = paciente_sinais_clinicos.id_sinais_clinicos)
+            WHERE paciente_sinais_clinicos.excluido IS NULL AND paciente_sinais_clinicos.id_paciente IN ($placeholders)";
+        $stmtSinaisClinicos = $pdo->prepare($sqlSinaisClinicos);
+        foreach ($ids as $i => $id) {
+            $stmtSinaisClinicos->bindValue($i + 1, $id, PDO::PARAM_INT);
+        }
+        $stmtSinaisClinicos->execute();
+        foreach ($stmtSinaisClinicos->fetchAll(PDO::FETCH_ASSOC) as $linhaClinico) {
+            if (!isset($mapaPacientes[$linhaClinico['id_paciente']])) {
+                continue;
+            }
+            $indice = $mapaPacientes[$linhaClinico['id_paciente']];
+            if ($linhaClinico['nome'] !== null && $linhaClinico['nome'] !== '') {
+                $linhas[$indice]['lista_sinais_clinicos'][] = $linhaClinico['nome'];
+            }
+        }
+
+        // Obstetrícia
+        $sqlObstetricia = "SELECT paciente_sinais_clinicos_obstetricia.id_paciente, sinais_clinicos_obstetricia.nome
+            FROM paciente_sinais_clinicos_obstetricia
+            INNER JOIN sinais_clinicos_obstetricia ON (sinais_clinicos_obstetricia.id = paciente_sinais_clinicos_obstetricia.id_sinais_clinicos_obstetrica)
+            WHERE paciente_sinais_clinicos_obstetricia.excluido IS NULL AND paciente_sinais_clinicos_obstetricia.id_paciente IN ($placeholders)";
+        $stmtObstetricia = $pdo->prepare($sqlObstetricia);
+        foreach ($ids as $i => $id) {
+            $stmtObstetricia->bindValue($i + 1, $id, PDO::PARAM_INT);
+        }
+        $stmtObstetricia->execute();
+        foreach ($stmtObstetricia->fetchAll(PDO::FETCH_ASSOC) as $linhaObs) {
+            if (!isset($mapaPacientes[$linhaObs['id_paciente']])) {
+                continue;
+            }
+            $indice = $mapaPacientes[$linhaObs['id_paciente']];
+            if ($linhaObs['nome'] !== null && $linhaObs['nome'] !== '') {
+                $linhas[$indice]['lista_obstetricia'][] = $linhaObs['nome'];
+            }
+        }
+
+        // Circulação
+        $sqlCirculacao = "SELECT paciente_circulacao.id_paciente, circulacao.nome AS circulacao_nome, circulacao_local.nome AS local_nome
+            FROM paciente_circulacao
+            INNER JOIN circulacao ON (circulacao.id = paciente_circulacao.id_circulacao)
+            LEFT JOIN circulacao_local ON (circulacao_local.id = circulacao.id_circulacao_local)
+            WHERE paciente_circulacao.excluido IS NULL AND paciente_circulacao.id_paciente IN ($placeholders)";
+        $stmtCirculacao = $pdo->prepare($sqlCirculacao);
+        foreach ($ids as $i => $id) {
+            $stmtCirculacao->bindValue($i + 1, $id, PDO::PARAM_INT);
+        }
+        $stmtCirculacao->execute();
+        foreach ($stmtCirculacao->fetchAll(PDO::FETCH_ASSOC) as $linhaCirc) {
+            if (!isset($mapaPacientes[$linhaCirc['id_paciente']])) {
+                continue;
+            }
+            $indice = $mapaPacientes[$linhaCirc['id_paciente']];
+            $descricao = '';
+            if ($linhaCirc['local_nome'] !== null && $linhaCirc['local_nome'] !== '') {
+                $descricao .= $linhaCirc['local_nome'] . ': ';
+            }
+            $descricao .= $linhaCirc['circulacao_nome'];
+            $descricao = trim($descricao, ': ');
+            if ($descricao !== '') {
+                $linhas[$indice]['lista_circulacao'][] = $descricao;
+            }
+        }
+
+        // Pupilas sintomas
+        $sqlPupilas = "SELECT paciente_pupilas.id_paciente, pupilas_sintomas.nome, paciente_pupilas.direita, paciente_pupilas.esquerda
+            FROM paciente_pupilas
+            INNER JOIN pupilas_sintomas ON (pupilas_sintomas.id = paciente_pupilas.id_pupilas_sintomas)
+            WHERE paciente_pupilas.excluido IS NULL AND paciente_pupilas.id_paciente IN ($placeholders)";
+        $stmtPupilas = $pdo->prepare($sqlPupilas);
+        foreach ($ids as $i => $id) {
+            $stmtPupilas->bindValue($i + 1, $id, PDO::PARAM_INT);
+        }
+        $stmtPupilas->execute();
+        foreach ($stmtPupilas->fetchAll(PDO::FETCH_ASSOC) as $linhaPupila) {
+            if (!isset($mapaPacientes[$linhaPupila['id_paciente']])) {
+                continue;
+            }
+            $indice = $mapaPacientes[$linhaPupila['id_paciente']];
+            $partes = [];
+            if ($linhaPupila['nome'] !== null && $linhaPupila['nome'] !== '') {
+                $partes[] = $linhaPupila['nome'];
+            }
+            $ladoDireita = ((int)$linhaPupila['direita'] === 1) ? 'D' : '';
+            $ladoEsquerda = ((int)$linhaPupila['esquerda'] === 1) ? 'E' : '';
+            if ($ladoDireita !== '' || $ladoEsquerda !== '') {
+                $partes[] = 'Lados: ' . trim($ladoDireita . ($ladoDireita !== '' && $ladoEsquerda !== '' ? '/' : '') . $ladoEsquerda, '/');
+            }
+            if (!empty($partes)) {
+                $linhas[$indice]['lista_pupilas'][] = implode(' | ', $partes);
+            }
+        }
+
+        foreach ($linhas as $indice => $linha) {
+            $linhas[$indice]['lista_lesoes'] = implode(' | ', array_unique($linha['lista_lesoes']));
+            $linhas[$indice]['lista_padroes'] = implode(' | ', array_unique($linha['lista_padroes']));
+            $linhas[$indice]['lista_sondagens'] = implode(' | ', array_unique($linha['lista_sondagens']));
+            $linhas[$indice]['lista_curativos'] = implode(' | ', array_unique($linha['lista_curativos']));
+            $linhas[$indice]['lista_imobilizacoes'] = implode(' | ', array_unique($linha['lista_imobilizacoes']));
+            $linhas[$indice]['lista_medicamentos'] = implode(' || ', array_unique($linha['lista_medicamentos']));
+            $linhas[$indice]['lista_sinais_vitais'] = implode(' || ', array_unique($linha['lista_sinais_vitais']));
+            $linhas[$indice]['lista_sinais_clinicos'] = implode(' | ', array_unique($linha['lista_sinais_clinicos']));
+            $linhas[$indice]['lista_obstetricia'] = implode(' | ', array_unique($linha['lista_obstetricia']));
+            $linhas[$indice]['lista_circulacao'] = implode(' | ', array_unique($linha['lista_circulacao']));
+            $linhas[$indice]['lista_pupilas'] = implode(' | ', array_unique($linha['lista_pupilas']));
+        }
+
         return [$linhas,$totalRegistros];
     }
     public function Editar()
